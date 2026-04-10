@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <title>Interactive Periodic Table | Grade XI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    /* ══════════════════════════════════════════════
+       TOKENS
+    ══════════════════════════════════════════════ */
+    :root {
+      --bg:        #060b18;
+      --card:      rgba(15,25,50,0.88);
+      --border:    rgba(255,255,255,0.07);
+      --text:      #e8f0ff;
+      --muted:     #7a8fbb;
+
+      --alkali:    #ff6b6b;
+      --alkaline:  #ff9f43;
+      --trans:     #54a0ff;
+      --post:      #01cbc6;
+      --metalloid: #a29bfe;
+      --nonmetal:  #55efc4;
+      --halogen:   #fd79a8;
+      --noble:     #c56ef7;
+      --lanth:     #f8a5c2;
+      --act:       #ffeaa7;
+
+      /* fluid cell size: scales from 28px (tiny) → 66px (desktop) */
+      --cell: clamp(28px, 4.8vw, 66px);
+      --gap:  clamp(2px,  0.35vw, 4px);
+      --sym-size: clamp(0.55rem, 1.3vw, 1.35rem);
+      --num-size: clamp(0.38rem, 0.7vw,  0.6rem);
+      --name-size:clamp(0.28rem, 0.5vw,  0.45rem);
+      --note-size:clamp(0.28rem, 0.45vw, 0.45rem);
+    }
+
+    /* ══════════════════════════════════════════════
+       RESET & BASE
+    ══════════════════════════════════════════════ */
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Rajdhani', sans-serif;
+      /* prevent page scroll while touch-dragging over table */
+      overscroll-behavior: none;
+    }
+
+    body {
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    /* ══════════════════════════════════════════════
+       AMBIENT GLOW (fixed, cheap)
+    ══════════════════════════════════════════════ */
+    .stars {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(84,160,255,.07), transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 90%, rgba(197,110,247,.05), transparent 60%),
+        radial-gradient(ellipse 50% 40% at 50% 50%, rgba(85,239,196,.04), transparent 70%);
+    }
+
+    /* ══════════════════════════════════════════════
+       PAGE WRAPPER
+    ══════════════════════════════════════════════ */
+    .page {
+      position: relative; z-index: 1;
+      padding: clamp(8px, 2vw, 32px) clamp(6px, 1.5vw, 24px) clamp(24px, 4vw, 60px);
+      display: flex; flex-direction: column;
+      align-items: center;
+      gap: clamp(10px, 1.8vw, 28px);
+    }
+
+    /* ══════════════════════════════════════════════
+       TITLE
+    ══════════════════════════════════════════════ */
+    .title-block { text-align: center; }
+    .title-block h1 {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(1rem, 3.5vw, 2.2rem);
+      font-weight: 900;
+      background: linear-gradient(135deg, #54a0ff, #c56ef7, #55efc4);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      letter-spacing: clamp(1px, 0.5vw, 4px);
+      margin-bottom: 4px;
+    }
+    .title-block p {
+      font-size: clamp(0.5rem, 1.2vw, 0.95rem);
+      color: var(--muted); letter-spacing: 1px; text-transform: uppercase;
+    }
+
+    /* ══════════════════════════════════════════════
+       LEGEND
+    ══════════════════════════════════════════════ */
+    .legend {
+      display: flex; flex-wrap: wrap; gap: clamp(4px,0.8vw,10px) clamp(8px,1.2vw,16px);
+      justify-content: center;
+      background: rgba(13,21,38,.9);
+      border: 1px solid var(--border);
+      border-radius: clamp(8px,1.5vw,16px);
+      padding: clamp(8px,1.2vw,16px) clamp(10px,1.8vw,24px);
+      backdrop-filter: blur(12px);
+      width: 100%; max-width: 1200px;
+    }
+    .legend-title {
+      width: 100%; text-align: center;
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(0.5rem, 0.9vw, 0.75rem);
+      color: var(--muted); letter-spacing: 2px; text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .legend-item {
+      display: flex; align-items: center;
+      gap: clamp(4px, 0.6vw, 8px);
+      font-size: clamp(0.5rem, 1vw, 0.82rem);
+      font-weight: 500; color: var(--text);
+      white-space: nowrap;
+    }
+    .legend-dot {
+      width: clamp(8px, 1.2vw, 14px);
+      height: clamp(8px, 1.2vw, 14px);
+      border-radius: 3px; flex-shrink: 0;
+    }
+
+    /* ══════════════════════════════════════════════
+       SCROLL WRAPPER — lets table scroll horizontally
+       only on very small screens where it can't fit
+    ══════════════════════════════════════════════ */
+    .table-scroller {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 4px;
+    }
+
+    /* ══════════════════════════════════════════════
+       PERIODIC TABLE GRID
+    ══════════════════════════════════════════════ */
+    .periodic-table {
+      display: grid;
+      grid-template-columns: repeat(18, var(--cell));
+      grid-template-rows: repeat(10, var(--cell));
+      gap: var(--gap);
+      /* centre the grid inside the scroller */
+      margin: 0 auto;
+      width: calc(18 * var(--cell) + 17 * var(--gap));
+    }
+
+    /* ══════════════════════════════════════════════
+       ELEMENT CELL
+    ══════════════════════════════════════════════ */
+    .element {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: clamp(3px, 0.5vw, 6px);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      cursor: pointer; position: relative;
+      transition: transform .15s, box-shadow .15s, border-color .15s, background .15s;
+      overflow: hidden;
+      /* prevent text selection while drag-playing */
+      user-select: none; -webkit-user-select: none;
+      /* prevent context menu on long-press mobile */
+      -webkit-touch-callout: none;
+    }
+
+    /* top glow strip */
+    .element::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 2px; opacity: .9;
+    }
+    /* inner sheen */
+    .element::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(160deg, rgba(255,255,255,.04), transparent 60%);
+      pointer-events: none;
+    }
+
+    /* hover (desktop) */
+    .element:hover {
+      transform: scale(1.4);
+      z-index: 100;
+      border-color: rgba(255,255,255,.4);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,.12),
+        0 6px 28px rgba(0,0,0,.7),
+        0 0 18px currentColor;
+      background: rgba(20,35,70,.97);
+    }
+
+    /* active (touch tap highlight) */
+    .element.active {
+      transform: scale(1.35);
+      z-index: 100;
+      border-color: rgba(255,255,255,.5);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,.18),
+        0 6px 28px rgba(0,0,0,.7),
+        0 0 22px currentColor;
+      background: rgba(20,35,70,.97);
+    }
+
+    .num {
+      position: absolute; top: clamp(1px,0.3vw,3px); left: clamp(2px,0.4vw,5px);
+      font-size: var(--num-size); opacity: .55;
+    }
+    .sym {
+      font-size: var(--sym-size); font-weight: 700; line-height: 1;
+      font-family: 'Orbitron', monospace;
+    }
+    .name {
+      font-size: var(--name-size); text-transform: uppercase;
+      letter-spacing: .3px; margin-top: 1px;
+      text-align: center; opacity: .75; padding: 0 1px;
+    }
+    .note-label {
+      position: absolute; bottom: clamp(1px,0.3vw,2px); right: clamp(2px,0.4vw,4px);
+      font-size: var(--note-size); opacity: .38;
+      font-family: 'Orbitron', monospace;
+    }
+
+    /* ══════════════════════════════════════════════
+       CATEGORY COLOR RULES
+    ══════════════════════════════════════════════ */
+    .alkali     { color: var(--alkali);    }
+    .alkali::before    { background: var(--alkali);    box-shadow: 0 0 6px var(--alkali);    }
+    .alkaline   { color: var(--alkaline); }
+    .alkaline::before  { background: var(--alkaline); box-shadow: 0 0 6px var(--alkaline); }
+    .transition { color: var(--trans);    }
+    .transition::before{ background: var(--trans);    box-shadow: 0 0 6px var(--trans);    }
+    .post       { color: var(--post);     }
+    .post::before      { background: var(--post);     box-shadow: 0 0 6px var(--post);     }
+    .metalloid  { color: var(--metalloid);}
+    .metalloid::before { background: var(--metalloid);box-shadow: 0 0 6px var(--metalloid);}
+    .nonmetal   { color: var(--nonmetal); }
+    .nonmetal::before  { background: var(--nonmetal); box-shadow: 0 0 6px var(--nonmetal); }
+    .halogen    { color: var(--halogen);  }
+    .halogen::before   { background: var(--halogen);  box-shadow: 0 0 6px var(--halogen);  }
+    .noble      { color: var(--noble);    }
+    .noble::before     { background: var(--noble);    box-shadow: 0 0 6px var(--noble);    }
+    .lanthanide { color: var(--lanth);    }
+    .lanthanide::before{ background: var(--lanth);    box-shadow: 0 0 6px var(--lanth);    }
+    .actinide   { color: var(--act);      }
+    .actinide::before  { background: var(--act);      box-shadow: 0 0 6px var(--act);      }
+
+    /* ══════════════════════════════════════════════
+       SPACER & SERIES LABELS
+    ══════════════════════════════════════════════ */
+    .spacer { grid-row: 8; grid-column: 1 / span 18; }
+
+    .series-label {
+      display: flex; align-items: center; justify-content: center;
+      font-size: clamp(0.28rem, 0.6vw, 0.55rem);
+      text-transform: uppercase; letter-spacing: 1px;
+      opacity: .5; font-family: 'Rajdhani', sans-serif;
+      border-radius: clamp(3px, 0.5vw, 6px);
+    }
+    .series-label.lbl-la { color: var(--lanth); border: 1px dashed var(--lanth); }
+    .series-label.lbl-ac { color: var(--act);   border: 1px dashed var(--act);   }
+
+    /* ══════════════════════════════════════════════
+       RIPPLE
+    ══════════════════════════════════════════════ */
+    @keyframes ripple {
+      0%   { transform: scale(1); opacity: .6; }
+      100% { transform: scale(2.5); opacity: 0; }
+    }
+    .ripple-ring {
+      position: absolute; inset: 0;
+      border-radius: inherit;
+      border: 2px solid currentColor;
+      animation: ripple .45s ease-out forwards;
+      pointer-events: none;
+    }
+
+    /* ══════════════════════════════════════════════
+       TOAST
+    ══════════════════════════════════════════════ */
+    .sound-toast {
+      position: fixed; bottom: clamp(14px, 3vw, 28px);
+      left: 50%; transform: translateX(-50%);
+      background: rgba(13,21,38,.96);
+      border: 1px solid rgba(84,160,255,.35);
+      border-radius: clamp(8px, 1.5vw, 12px);
+      padding: clamp(6px,1vw,10px) clamp(12px,2vw,24px);
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(0.55rem, 1.2vw, 0.75rem);
+      color: #54a0ff; letter-spacing: 1.5px;
+      white-space: nowrap;
+      opacity: 0; transition: opacity .3s;
+      pointer-events: none; z-index: 999;
+      box-shadow: 0 0 20px rgba(84,160,255,.2);
+    }
+    .sound-toast.show { opacity: 1; }
+
+    /* ══════════════════════════════════════════════
+       MOBILE LANDSCAPE TUNING
+       Target: phones in landscape (max-height ~450px)
+    ══════════════════════════════════════════════ */
+    @media screen and (orientation: landscape) and (max-height: 500px) {
+      :root {
+        /* tighter cells in landscape mobile — fit 18 cols in viewport width */
+        --cell: clamp(22px, calc((100vw - 48px) / 18), 50px);
+        --gap:  clamp(1px, 0.25vw, 3px);
+        --sym-size:  clamp(0.48rem, 1.15vw, 1rem);
+        --num-size:  clamp(0.3rem,  0.6vw,  0.5rem);
+        --name-size: clamp(0.22rem, 0.42vw, 0.4rem);
+        --note-size: clamp(0.22rem, 0.38vw, 0.38rem);
+      }
+
+      /* compact header */
+      .title-block h1 { font-size: clamp(0.75rem, 2.5vw, 1.4rem); }
+      .title-block p  { font-size: clamp(0.42rem, 0.9vw, 0.7rem); }
+
+      /* legend: single scrollable row */
+      .legend {
+        flex-wrap: nowrap; overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 5px 10px; gap: 6px 12px;
+        border-radius: 8px;
+        scrollbar-width: none;
+      }
+      .legend::-webkit-scrollbar { display: none; }
+      .legend-title { display: none; }
+      .legend-item  { font-size: clamp(0.42rem, 0.85vw, 0.65rem); }
+      .legend-dot   { width: 7px; height: 7px; }
+
+      /* no scale-up hover on tiny cells — just glow */
+      .element:hover {
+        transform: scale(1.2);
+      }
+      .element.active {
+        transform: scale(1.2);
+      }
+
+      .page { gap: 6px; padding: 6px 4px 20px; }
+
+      /* toast moves up so it's not hidden by chrome UI */
+      .sound-toast { bottom: 10px; }
+    }
+
+    /* ══════════════════════════════════════════════
+       TABLET PORTRAIT / SMALL LAPTOP TWEAKS
+    ══════════════════════════════════════════════ */
+    @media screen and (max-width: 900px) and (orientation: portrait) {
+      :root {
+        --cell: clamp(22px, calc((100vw - 32px) / 18), 48px);
+        --gap: 2px;
+      }
+      .legend { gap: 5px 10px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="stars"></div>
+
+<div class="page">
+
+  <!-- TITLE -->
+  <div class="title-block">
+    <h1>PERIODIC TABLE</h1>
+    <p>Hover to play note &nbsp;·&nbsp; Click element to view details</p>
+  </div>
+
+  <!-- LEGEND -->
+  <div class="legend">
+    <div class="legend-title">⬛ Color Key — Element Categories</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--alkali)"></div> Alkali Metals</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--alkaline)"></div> Alkaline Earth</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--trans)"></div> Transition Metals</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--post)"></div> Post-Transition</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--metalloid)"></div> Metalloids</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--nonmetal)"></div> Reactive Nonmetals</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--halogen)"></div> Halogens</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--noble)"></div> Noble Gases</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--lanth)"></div> Lanthanides</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--act)"></div> Actinides</div>
+  </div>
+
+  <!-- TABLE SCROLL WRAPPER -->
+  <div class="table-scroller">
+    <div class="periodic-table" id="table">
+
+      <!-- Row 1 -->
+      <a href="element_1.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element nonmetal"  style="grid-column:1;grid-row:1"  data-note="C4"  data-num="1"><span class="num">1</span><span class="sym">H</span><span class="name">Hydrogen</span><span class="note-label">C4</span></div></a>
+      <a href="element_2.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element noble"     style="grid-column:18;grid-row:1" data-note="D4"  data-num="2"><span class="num">2</span><span class="sym">He</span><span class="name">Helium</span><span class="note-label">D4</span></div></a>
+
+      <!-- Row 2 -->
+      <a href="element_3.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element alkali"    style="grid-column:1;grid-row:2"  data-note="E4"  data-num="3"><span class="num">3</span><span class="sym">Li</span><span class="name">Lithium</span><span class="note-label">E4</span></div></a>
+      <a href="element_4.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element alkaline"  style="grid-column:2;grid-row:2"  data-note="F4"  data-num="4"><span class="num">4</span><span class="sym">Be</span><span class="name">Beryllium</span><span class="note-label">F4</span></div></a>
+      <a href="element_5.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element metalloid" style="grid-column:13;grid-row:2" data-note="G4"  data-num="5"><span class="num">5</span><span class="sym">B</span><span class="name">Boron</span><span class="note-label">G4</span></div></a>
+      <a href="element_6.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element nonmetal"  style="grid-column:14;grid-row:2" data-note="A4"  data-num="6"><span class="num">6</span><span class="sym">C</span><span class="name">Carbon</span><span class="note-label">A4</span></div></a>
+      <a href="element_7.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element nonmetal"  style="grid-column:15;grid-row:2" data-note="B4"  data-num="7"><span class="num">7</span><span class="sym">N</span><span class="name">Nitrogen</span><span class="note-label">B4</span></div></a>
+      <a href="element_8.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element nonmetal"  style="grid-column:16;grid-row:2" data-note="C5"  data-num="8"><span class="num">8</span><span class="sym">O</span><span class="name">Oxygen</span><span class="note-label">C5</span></div></a>
+      <a href="element_9.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element halogen"   style="grid-column:17;grid-row:2" data-note="D5"  data-num="9"><span class="num">9</span><span class="sym">F</span><span class="name">Fluorine</span><span class="note-label">D5</span></div></a>
+      <a href="element_10.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element noble"     style="grid-column:18;grid-row:2" data-note="E5"  data-num="10"><span class="num">10</span><span class="sym">Ne</span><span class="name">Neon</span><span class="note-label">E5</span></div></a>
+
+      <!-- Row 3 -->
+      <a href="element_11.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element alkali"    style="grid-column:1;grid-row:3"  data-note="F5"  data-num="11"><span class="num">11</span><span class="sym">Na</span><span class="name">Sodium</span><span class="note-label">F5</span></div></a>
+      <a href="element_12.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element alkaline"  style="grid-column:2;grid-row:3"  data-note="G5"  data-num="12"><span class="num">12</span><span class="sym">Mg</span><span class="name">Magnesium</span><span class="note-label">G5</span></div></a>
+      <a href="element_13.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element post"      style="grid-column:13;grid-row:3" data-note="A5"  data-num="13"><span class="num">13</span><span class="sym">Al</span><span class="name">Aluminum</span><span class="note-label">A5</span></div></a>
+      <a href="element_14.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element metalloid" style="grid-column:14;grid-row:3" data-note="B5"  data-num="14"><span class="num">14</span><span class="sym">Si</span><span class="name">Silicon</span><span class="note-label">B5</span></div></a>
+      <a href="element_15.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element nonmetal"  style="grid-column:15;grid-row:3" data-note="C6"  data-num="15"><span class="num">15</span><span class="sym">P</span><span class="name">Phosphorus</span><span class="note-label">C6</span></div></a>
+      <a href="element_16.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element nonmetal"  style="grid-column:16;grid-row:3" data-note="D6"  data-num="16"><span class="num">16</span><span class="sym">S</span><span class="name">Sulfur</span><span class="note-label">D6</span></div></a>
+      <a href="element_17.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element halogen"   style="grid-column:17;grid-row:3" data-note="E6"  data-num="17"><span class="num">17</span><span class="sym">Cl</span><span class="name">Chlorine</span><span class="note-label">E6</span></div></a>
+      <a href="element_18.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element noble"     style="grid-column:18;grid-row:3" data-note="F6"  data-num="18"><span class="num">18</span><span class="sym">Ar</span><span class="name">Argon</span><span class="note-label">F6</span></div></a>
+
+      <!-- Row 4 -->
+      <a href="element_19.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element alkali"    style="grid-column:1;grid-row:4"  data-note="G6"  data-num="19"><span class="num">19</span><span class="sym">K</span><span class="name">Potassium</span><span class="note-label">G6</span></div></a>
+      <a href="element_20.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element alkaline"  style="grid-column:2;grid-row:4"  data-note="A6"  data-num="20"><span class="num">20</span><span class="sym">Ca</span><span class="name">Calcium</span><span class="note-label">A6</span></div></a>
+      <a href="element_21.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:3;grid-row:4" data-note="B6"  data-num="21"><span class="num">21</span><span class="sym">Sc</span><span class="name">Scandium</span><span class="note-label">B6</span></div></a>
+      <a href="element_22.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:4;grid-row:4" data-note="C3"  data-num="22"><span class="num">22</span><span class="sym">Ti</span><span class="name">Titanium</span><span class="note-label">C3</span></div></a>
+      <a href="element_23.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:5;grid-row:4" data-note="D3"  data-num="23"><span class="num">23</span><span class="sym">V</span><span class="name">Vanadium</span><span class="note-label">D3</span></div></a>
+      <a href="element_24.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:6;grid-row:4" data-note="E3"  data-num="24"><span class="num">24</span><span class="sym">Cr</span><span class="name">Chromium</span><span class="note-label">E3</span></div></a>
+      <a href="element_25.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:7;grid-row:4" data-note="F3"  data-num="25"><span class="num">25</span><span class="sym">Mn</span><span class="name">Manganese</span><span class="note-label">F3</span></div></a>
+      <a href="element_26.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:8;grid-row:4" data-note="G3"  data-num="26"><span class="num">26</span><span class="sym">Fe</span><span class="name">Iron</span><span class="note-label">G3</span></div></a>
+      <a href="element_27.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:9;grid-row:4" data-note="A3"  data-num="27"><span class="num">27</span><span class="sym">Co</span><span class="name">Cobalt</span><span class="note-label">A3</span></div></a>
+      <a href="element_28.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:10;grid-row:4" data-note="B3" data-num="28"><span class="num">28</span><span class="sym">Ni</span><span class="name">Nickel</span><span class="note-label">B3</span></div></a>
+      <a href="element_29.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:11;grid-row:4" data-note="C4" data-num="29"><span class="num">29</span><span class="sym">Cu</span><span class="name">Copper</span><span class="note-label">C4</span></div></a>
+      <a href="element_30.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:12;grid-row:4" data-note="D4" data-num="30"><span class="num">30</span><span class="sym">Zn</span><span class="name">Zinc</span><span class="note-label">D4</span></div></a>
+      <a href="element_31.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element post"       style="grid-column:13;grid-row:4" data-note="E4" data-num="31"><span class="num">31</span><span class="sym">Ga</span><span class="name">Gallium</span><span class="note-label">E4</span></div></a>
+      <a href="element_32.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element metalloid"  style="grid-column:14;grid-row:4" data-note="F4" data-num="32"><span class="num">32</span><span class="sym">Ge</span><span class="name">Germanium</span><span class="note-label">F4</span></div></a>
+      <a href="element_33.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element metalloid"  style="grid-column:15;grid-row:4" data-note="G4" data-num="33"><span class="num">33</span><span class="sym">As</span><span class="name">Arsenic</span><span class="note-label">G4</span></div></a>
+      <a href="element_34.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element nonmetal"   style="grid-column:16;grid-row:4" data-note="A4" data-num="34"><span class="num">34</span><span class="sym">Se</span><span class="name">Selenium</span><span class="note-label">A4</span></div></a>
+      <a href="element_35.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element halogen"    style="grid-column:17;grid-row:4" data-note="B4" data-num="35"><span class="num">35</span><span class="sym">Br</span><span class="name">Bromine</span><span class="note-label">B4</span></div></a>
+      <a href="element_36.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element noble"      style="grid-column:18;grid-row:4" data-note="C5" data-num="36"><span class="num">36</span><span class="sym">Kr</span><span class="name">Krypton</span><span class="note-label">C5</span></div></a>
+
+      <!-- Row 5 -->
+      <a href="element_37.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element alkali"    style="grid-column:1;grid-row:5"  data-note="D5"  data-num="37"><span class="num">37</span><span class="sym">Rb</span><span class="name">Rubidium</span><span class="note-label">D5</span></div></a>
+      <a href="element_38.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element alkaline"  style="grid-column:2;grid-row:5"  data-note="E5"  data-num="38"><span class="num">38</span><span class="sym">Sr</span><span class="name">Strontium</span><span class="note-label">E5</span></div></a>
+      <a href="element_39.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:3;grid-row:5" data-note="F5"  data-num="39"><span class="num">39</span><span class="sym">Y</span><span class="name">Yttrium</span><span class="note-label">F5</span></div></a>
+      <a href="element_40.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:4;grid-row:5" data-note="G5"  data-num="40"><span class="num">40</span><span class="sym">Zr</span><span class="name">Zirconium</span><span class="note-label">G5</span></div></a>
+      <a href="element_41.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:5;grid-row:5" data-note="A5"  data-num="41"><span class="num">41</span><span class="sym">Nb</span><span class="name">Niobium</span><span class="note-label">A5</span></div></a>
+      <a href="element_42.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:6;grid-row:5" data-note="B5"  data-num="42"><span class="num">42</span><span class="sym">Mo</span><span class="name">Molybdenum</span><span class="note-label">B5</span></div></a>
+      <a href="element_43.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:7;grid-row:5" data-note="C6"  data-num="43"><span class="num">43</span><span class="sym">Tc</span><span class="name">Technetium</span><span class="note-label">C6</span></div></a>
+      <a href="element_44.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:8;grid-row:5" data-note="D6"  data-num="44"><span class="num">44</span><span class="sym">Ru</span><span class="name">Ruthenium</span><span class="note-label">D6</span></div></a>
+      <a href="element_45.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:9;grid-row:5" data-note="E6"  data-num="45"><span class="num">45</span><span class="sym">Rh</span><span class="name">Rhodium</span><span class="note-label">E6</span></div></a>
+      <a href="element_46.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:10;grid-row:5" data-note="F6" data-num="46"><span class="num">46</span><span class="sym">Pd</span><span class="name">Palladium</span><span class="note-label">F6</span></div></a>
+      <a href="element_47.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:11;grid-row:5" data-note="G6" data-num="47"><span class="num">47</span><span class="sym">Ag</span><span class="name">Silver</span><span class="note-label">G6</span></div></a>
+      <a href="element_48.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:12;grid-row:5" data-note="A6" data-num="48"><span class="num">48</span><span class="sym">Cd</span><span class="name">Cadmium</span><span class="note-label">A6</span></div></a>
+      <a href="element_49.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element post"       style="grid-column:13;grid-row:5" data-note="B6" data-num="49"><span class="num">49</span><span class="sym">In</span><span class="name">Indium</span><span class="note-label">B6</span></div></a>
+      <a href="element_50.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element post"       style="grid-column:14;grid-row:5" data-note="C3" data-num="50"><span class="num">50</span><span class="sym">Sn</span><span class="name">Tin</span><span class="note-label">C3</span></div></a>
+      <a href="element_51.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element metalloid"  style="grid-column:15;grid-row:5" data-note="D3" data-num="51"><span class="num">51</span><span class="sym">Sb</span><span class="name">Antimony</span><span class="note-label">D3</span></div></a>
+      <a href="element_52.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element metalloid"  style="grid-column:16;grid-row:5" data-note="E3" data-num="52"><span class="num">52</span><span class="sym">Te</span><span class="name">Tellurium</span><span class="note-label">E3</span></div></a>
+      <a href="element_53.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element halogen"    style="grid-column:17;grid-row:5" data-note="F3" data-num="53"><span class="num">53</span><span class="sym">I</span><span class="name">Iodine</span><span class="note-label">F3</span></div></a>
+      <a href="element_54.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element noble"      style="grid-column:18;grid-row:5" data-note="G3" data-num="54"><span class="num">54</span><span class="sym">Xe</span><span class="name">Xenon</span><span class="note-label">G3</span></div></a>
+
+      <!-- Row 6 -->
+      <a href="element_55.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element alkali"    style="grid-column:1;grid-row:6"  data-note="A3"  data-num="55"><span class="num">55</span><span class="sym">Cs</span><span class="name">Cesium</span><span class="note-label">A3</span></div></a>
+      <a href="element_56.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element alkaline"  style="grid-column:2;grid-row:6"  data-note="B3"  data-num="56"><span class="num">56</span><span class="sym">Ba</span><span class="name">Barium</span><span class="note-label">B3</span></div></a>
+      <div class="series-label lbl-la" style="grid-column:3;grid-row:6">La–Lu</div>
+      <a href="element_72.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:4;grid-row:6" data-note="C4"  data-num="72"><span class="num">72</span><span class="sym">Hf</span><span class="name">Hafnium</span><span class="note-label">C4</span></div></a>
+      <a href="element_73.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:5;grid-row:6" data-note="D4"  data-num="73"><span class="num">73</span><span class="sym">Ta</span><span class="name">Tantalum</span><span class="note-label">D4</span></div></a>
+      <a href="element_74.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:6;grid-row:6" data-note="E4"  data-num="74"><span class="num">74</span><span class="sym">W</span><span class="name">Tungsten</span><span class="note-label">E4</span></div></a>
+      <a href="element_75.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:7;grid-row:6" data-note="F4"  data-num="75"><span class="num">75</span><span class="sym">Re</span><span class="name">Rhenium</span><span class="note-label">F4</span></div></a>
+      <a href="element_76.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:8;grid-row:6" data-note="G4"  data-num="76"><span class="num">76</span><span class="sym">Os</span><span class="name">Osmium</span><span class="note-label">G4</span></div></a>
+      <a href="element_77.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:9;grid-row:6" data-note="A4"  data-num="77"><span class="num">77</span><span class="sym">Ir</span><span class="name">Iridium</span><span class="note-label">A4</span></div></a>
+      <a href="element_78.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:10;grid-row:6" data-note="B4" data-num="78"><span class="num">78</span><span class="sym">Pt</span><span class="name">Platinum</span><span class="note-label">B4</span></div></a>
+      <a href="element_79.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:11;grid-row:6" data-note="C5" data-num="79"><span class="num">79</span><span class="sym">Au</span><span class="name">Gold</span><span class="note-label">C5</span></div></a>
+      <a href="element_80.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:12;grid-row:6" data-note="D5" data-num="80"><span class="num">80</span><span class="sym">Hg</span><span class="name">Mercury</span><span class="note-label">D5</span></div></a>
+      <a href="element_81.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element post"       style="grid-column:13;grid-row:6" data-note="E5" data-num="81"><span class="num">81</span><span class="sym">Tl</span><span class="name">Thallium</span><span class="note-label">E5</span></div></a>
+      <a href="element_82.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element post"       style="grid-column:14;grid-row:6" data-note="F5" data-num="82"><span class="num">82</span><span class="sym">Pb</span><span class="name">Lead</span><span class="note-label">F5</span></div></a>
+      <a href="element_83.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element post"       style="grid-column:15;grid-row:6" data-note="G5" data-num="83"><span class="num">83</span><span class="sym">Bi</span><span class="name">Bismuth</span><span class="note-label">G5</span></div></a>
+      <a href="element_84.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element post"       style="grid-column:16;grid-row:6" data-note="A5" data-num="84"><span class="num">84</span><span class="sym">Po</span><span class="name">Polonium</span><span class="note-label">A5</span></div></a>
+      <a href="element_85.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element halogen"    style="grid-column:17;grid-row:6" data-note="B5" data-num="85"><span class="num">85</span><span class="sym">At</span><span class="name">Astatine</span><span class="note-label">B5</span></div></a>
+      <a href="element_86.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element noble"      style="grid-column:18;grid-row:6" data-note="C6" data-num="86"><span class="num">86</span><span class="sym">Rn</span><span class="name">Radon</span><span class="note-label">C6</span></div></a>
+
+      <!-- Row 7 -->
+      <a href="element_87.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element alkali"    style="grid-column:1;grid-row:7"  data-note="D6"  data-num="87"><span class="num">87</span><span class="sym">Fr</span><span class="name">Francium</span><span class="note-label">D6</span></div></a>
+      <a href="element_88.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element alkaline"  style="grid-column:2;grid-row:7"  data-note="E6"  data-num="88"><span class="num">88</span><span class="sym">Ra</span><span class="name">Radium</span><span class="note-label">E6</span></div></a>
+      <div class="series-label lbl-ac" style="grid-column:3;grid-row:7">Ac–No</div>
+      <a href="element_104.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:4;grid-row:7" data-note="F6"  data-num="104"><span class="num">104</span><span class="sym">Rf</span><span class="name">Rutherfordium</span><span class="note-label">F6</span></div></a>
+      <a href="element_105.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:5;grid-row:7" data-note="G6"  data-num="105"><span class="num">105</span><span class="sym">Db</span><span class="name">Dubnium</span><span class="note-label">G6</span></div></a>
+      <a href="element_106.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:6;grid-row:7" data-note="A6"  data-num="106"><span class="num">106</span><span class="sym">Sg</span><span class="name">Seaborgium</span><span class="note-label">A6</span></div></a>
+      <a href="element_107.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:7;grid-row:7" data-note="B6"  data-num="107"><span class="num">107</span><span class="sym">Bh</span><span class="name">Bohrium</span><span class="note-label">B6</span></div></a>
+      <a href="element_108.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:8;grid-row:7" data-note="C3"  data-num="108"><span class="num">108</span><span class="sym">Hs</span><span class="name">Hassium</span><span class="note-label">C3</span></div></a>
+      <a href="element_109.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:9;grid-row:7" data-note="D3"  data-num="109"><span class="num">109</span><span class="sym">Mt</span><span class="name">Meitnerium</span><span class="note-label">D3</span></div></a>
+      <a href="element_110.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:10;grid-row:7" data-note="E3" data-num="110"><span class="num">110</span><span class="sym">Ds</span><span class="name">Darmstadtium</span><span class="note-label">E3</span></div></a>
+      <a href="element_111.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:11;grid-row:7" data-note="F3" data-num="111"><span class="num">111</span><span class="sym">Rg</span><span class="name">Roentgenium</span><span class="note-label">F3</span></div></a>
+      <a href="element_112.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element transition" style="grid-column:12;grid-row:7" data-note="G3" data-num="112"><span class="num">112</span><span class="sym">Cn</span><span class="name">Copernicium</span><span class="note-label">G3</span></div></a>
+      <a href="element_113.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element post"       style="grid-column:13;grid-row:7" data-note="A3" data-num="113"><span class="num">113</span><span class="sym">Nh</span><span class="name">Nihonium</span><span class="note-label">A3</span></div></a>
+      <a href="element_114.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element post"       style="grid-column:14;grid-row:7" data-note="B3" data-num="114"><span class="num">114</span><span class="sym">Fl</span><span class="name">Flerovium</span><span class="note-label">B3</span></div></a>
+      <a href="element_115.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element post"       style="grid-column:15;grid-row:7" data-note="C4" data-num="115"><span class="num">115</span><span class="sym">Mc</span><span class="name">Moscovium</span><span class="note-label">C4</span></div></a>
+      <a href="element_116.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element post"       style="grid-column:16;grid-row:7" data-note="D4" data-num="116"><span class="num">116</span><span class="sym">Lv</span><span class="name">Livermorium</span><span class="note-label">D4</span></div></a>
+      <a href="element_117.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element halogen"    style="grid-column:17;grid-row:7" data-note="E4" data-num="117"><span class="num">117</span><span class="sym">Ts</span><span class="name">Tennessine</span><span class="note-label">E4</span></div></a>
+      <a href="element_118.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element noble"      style="grid-column:18;grid-row:7" data-note="F4" data-num="118"><span class="num">118</span><span class="sym">Og</span><span class="name">Oganesson</span><span class="note-label">F4</span></div></a>
+
+      <div class="spacer"></div>
+
+      <!-- Lanthanides Row 9 -->
+      <a href="element_57.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element lanthanide" style="grid-column:3;grid-row:9"  data-note="G4"  data-num="57"><span class="num">57</span><span class="sym">La</span><span class="name">Lanthanum</span><span class="note-label">G4</span></div></a>
+      <a href="element_58.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element lanthanide" style="grid-column:4;grid-row:9"  data-note="A4"  data-num="58"><span class="num">58</span><span class="sym">Ce</span><span class="name">Cerium</span><span class="note-label">A4</span></div></a>
+      <a href="element_59.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element lanthanide" style="grid-column:5;grid-row:9"  data-note="B4"  data-num="59"><span class="num">59</span><span class="sym">Pr</span><span class="name">Praseodymium</span><span class="note-label">B4</span></div></a>
+      <a href="element_60.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element lanthanide" style="grid-column:6;grid-row:9"  data-note="C5"  data-num="60"><span class="num">60</span><span class="sym">Nd</span><span class="name">Neodymium</span><span class="note-label">C5</span></div></a>
+      <a href="element_61.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element lanthanide" style="grid-column:7;grid-row:9"  data-note="D5"  data-num="61"><span class="num">61</span><span class="sym">Pm</span><span class="name">Promethium</span><span class="note-label">D5</span></div></a>
+      <a href="element_62.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element lanthanide" style="grid-column:8;grid-row:9"  data-note="E5"  data-num="62"><span class="num">62</span><span class="sym">Sm</span><span class="name">Samarium</span><span class="note-label">E5</span></div></a>
+      <a href="element_63.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element lanthanide" style="grid-column:9;grid-row:9"  data-note="F5"  data-num="63"><span class="num">63</span><span class="sym">Eu</span><span class="name">Europium</span><span class="note-label">F5</span></div></a>
+      <a href="element_64.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element lanthanide" style="grid-column:10;grid-row:9" data-note="G5"  data-num="64"><span class="num">64</span><span class="sym">Gd</span><span class="name">Gadolinium</span><span class="note-label">G5</span></div></a>
+      <a href="element_65.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element lanthanide" style="grid-column:11;grid-row:9" data-note="A5"  data-num="65"><span class="num">65</span><span class="sym">Tb</span><span class="name">Terbium</span><span class="note-label">A5</span></div></a>
+      <a href="element_66.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element lanthanide" style="grid-column:12;grid-row:9" data-note="B5"  data-num="66"><span class="num">66</span><span class="sym">Dy</span><span class="name">Dysprosium</span><span class="note-label">B5</span></div></a>
+      <a href="element_67.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element lanthanide" style="grid-column:13;grid-row:9" data-note="C6"  data-num="67"><span class="num">67</span><span class="sym">Ho</span><span class="name">Holmium</span><span class="note-label">C6</span></div></a>
+      <a href="element_68.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element lanthanide" style="grid-column:14;grid-row:9" data-note="D6"  data-num="68"><span class="num">68</span><span class="sym">Er</span><span class="name">Erbium</span><span class="note-label">D6</span></div></a>
+      <a href="element_69.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element lanthanide" style="grid-column:15;grid-row:9" data-note="E6"  data-num="69"><span class="num">69</span><span class="sym">Tm</span><span class="name">Thulium</span><span class="note-label">E6</span></div></a>
+      <a href="element_70.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element lanthanide" style="grid-column:16;grid-row:9" data-note="F6"  data-num="70"><span class="num">70</span><span class="sym">Yb</span><span class="name">Ytterbium</span><span class="note-label">F6</span></div></a>
+      <a href="element_71.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element lanthanide" style="grid-column:17;grid-row:9" data-note="G6"  data-num="71"><span class="num">71</span><span class="sym">Lu</span><span class="name">Lutetium</span><span class="note-label">G6</span></div></a>
+
+      <!-- Actinides Row 10 -->
+      <a href="element_89.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element actinide"   style="grid-column:3;grid-row:10"  data-note="A6"  data-num="89"><span class="num">89</span><span class="sym">Ac</span><span class="name">Actinium</span><span class="note-label">A6</span></div></a>
+      <a href="element_90.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element actinide"   style="grid-column:4;grid-row:10"  data-note="B6"  data-num="90"><span class="num">90</span><span class="sym">Th</span><span class="name">Thorium</span><span class="note-label">B6</span></div></a>
+      <a href="element_91.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element actinide"   style="grid-column:5;grid-row:10"  data-note="C3"  data-num="91"><span class="num">91</span><span class="sym">Pa</span><span class="name">Protactinium</span><span class="note-label">C3</span></div></a>
+      <a href="element_92.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element actinide"   style="grid-column:6;grid-row:10"  data-note="D3"  data-num="92"><span class="num">92</span><span class="sym">U</span><span class="name">Uranium</span><span class="note-label">D3</span></div></a>
+      <a href="element_93.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element actinide"   style="grid-column:7;grid-row:10"  data-note="E3"  data-num="93"><span class="num">93</span><span class="sym">Np</span><span class="name">Neptunium</span><span class="note-label">E3</span></div></a>
+      <a href="element_94.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element actinide"   style="grid-column:8;grid-row:10"  data-note="F3"  data-num="94"><span class="num">94</span><span class="sym">Pu</span><span class="name">Plutonium</span><span class="note-label">F3</span></div></a>
+      <a href="element_95.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element actinide"   style="grid-column:9;grid-row:10"  data-note="G3"  data-num="95"><span class="num">95</span><span class="sym">Am</span><span class="name">Americium</span><span class="note-label">G3</span></div></a>
+      <a href="element_96.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element actinide"   style="grid-column:10;grid-row:10" data-note="A3"  data-num="96"><span class="num">96</span><span class="sym">Cm</span><span class="name">Curium</span><span class="note-label">A3</span></div></a>
+      <a href="element_97.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element actinide"   style="grid-column:11;grid-row:10" data-note="B3"  data-num="97"><span class="num">97</span><span class="sym">Bk</span><span class="name">Berkelium</span><span class="note-label">B3</span></div></a>
+      <a href="element_98.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element actinide"   style="grid-column:12;grid-row:10" data-note="C4"  data-num="98"><span class="num">98</span><span class="sym">Cf</span><span class="name">Californium</span><span class="note-label">C4</span></div></a>
+      <a href="element_99.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element actinide"   style="grid-column:13;grid-row:10" data-note="D4"  data-num="99"><span class="num">99</span><span class="sym">Es</span><span class="name">Einsteinium</span><span class="note-label">D4</span></div></a>
+      <a href="element_100.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element actinide"   style="grid-column:14;grid-row:10" data-note="E4"  data-num="100"><span class="num">100</span><span class="sym">Fm</span><span class="name">Fermium</span><span class="note-label">E4</span></div></a>
+      <a href="element_101.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element actinide"   style="grid-column:15;grid-row:10" data-note="F4"  data-num="101"><span class="num">101</span><span class="sym">Md</span><span class="name">Mendelevium</span><span class="note-label">F4</span></div></a>
+      <a href="element_102.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element actinide"   style="grid-column:16;grid-row:10" data-note="G4"  data-num="102"><span class="num">102</span><span class="sym">No</span><span class="name">Nobelium</span><span class="note-label">G4</span></div></a>
+      <a href="element_103.html" style="text-decoration:none;color:inherit;display:contents;"><div class="element actinide"   style="grid-column:17;grid-row:10" data-note="A4"  data-num="103"><span class="num">103</span><span class="sym">Lr</span><span class="name">Lawrencium</span><span class="note-label">A4</span></div></a>
+
+    </div><!-- /periodic-table -->
+  </div><!-- /table-scroller -->
+
+</div><!-- /page -->
+
+<div class="sound-toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  WEB AUDIO PIANO SYNTHESIZER
+// ═══════════════════════════════════════════════════
+let audioCtx = null;
+
+const NOTE_FREQ = {
+  C3:130.81, D3:146.83, E3:164.81, F3:174.61, G3:196.00, A3:220.00, B3:246.94,
+  C4:261.63, D4:293.66, E4:329.63, F4:349.23, G4:392.00, A4:440.00, B4:493.88,
+  C5:523.25, D5:587.33, E5:659.25, F5:698.46, G5:783.99, A5:880.00, B5:987.77,
+  C6:1046.50,D6:1174.66,E6:1318.51,F6:1396.91,G6:1567.98,A6:1760.00,B6:1975.53
+};
+
+function getCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function playPianoNote(freq) {
+  const ctx = getCtx();
+  const now = ctx.currentTime;
+  const dur = 1.1;
+
+  [freq, freq*2, freq*3, freq*4, freq*5].forEach((f, i) => {
+    const g = [1.0, 0.5, 0.25, 0.12, 0.06][i];
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(f, now);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(g * 0.85, now + 0.005);
+    gain.gain.exponentialRampToValueAtTime(g * 0.28, now + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(now); osc.stop(now + dur + 0.05);
+  });
+
+  // key-click thud
+  const bl = Math.floor(ctx.sampleRate * 0.018);
+  const buf = ctx.createBuffer(1, bl, ctx.sampleRate);
+  const d   = buf.getChannelData(0);
+  for (let i = 0; i < bl; i++) d[i] = (Math.random()*2-1) * (1 - i/bl);
+  const ns = ctx.createBufferSource();
+  const ng = ctx.createGain();
+  ns.buffer = buf;
+  ng.gain.setValueAtTime(0.07, now);
+  ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.018);
+  ns.connect(ng); ng.connect(ctx.destination);
+  ns.start(now);
+}
+
+// ═══════════════════════════════════════════════════
+//  ELEMENT NAME MAP
+// ═══════════════════════════════════════════════════
+const NAMES = {
+  1:'Hydrogen',2:'Helium',3:'Lithium',4:'Beryllium',5:'Boron',6:'Carbon',7:'Nitrogen',
+  8:'Oxygen',9:'Fluorine',10:'Neon',11:'Sodium',12:'Magnesium',13:'Aluminum',14:'Silicon',
+  15:'Phosphorus',16:'Sulfur',17:'Chlorine',18:'Argon',19:'Potassium',20:'Calcium',
+  21:'Scandium',22:'Titanium',23:'Vanadium',24:'Chromium',25:'Manganese',26:'Iron',
+  27:'Cobalt',28:'Nickel',29:'Copper',30:'Zinc',31:'Gallium',32:'Germanium',33:'Arsenic',
+  34:'Selenium',35:'Bromine',36:'Krypton',37:'Rubidium',38:'Strontium',39:'Yttrium',
+  40:'Zirconium',41:'Niobium',42:'Molybdenum',43:'Technetium',44:'Ruthenium',45:'Rhodium',
+  46:'Palladium',47:'Silver',48:'Cadmium',49:'Indium',50:'Tin',51:'Antimony',52:'Tellurium',
+  53:'Iodine',54:'Xenon',55:'Cesium',56:'Barium',57:'Lanthanum',58:'Cerium',
+  59:'Praseodymium',60:'Neodymium',61:'Promethium',62:'Samarium',63:'Europium',
+  64:'Gadolinium',65:'Terbium',66:'Dysprosium',67:'Holmium',68:'Erbium',69:'Thulium',
+  70:'Ytterbium',71:'Lutetium',72:'Hafnium',73:'Tantalum',74:'Tungsten',75:'Rhenium',
+  76:'Osmium',77:'Iridium',78:'Platinum',79:'Gold',80:'Mercury',81:'Thallium',82:'Lead',
+  83:'Bismuth',84:'Polonium',85:'Astatine',86:'Radon',87:'Francium',88:'Radium',
+  89:'Actinium',90:'Thorium',91:'Protactinium',92:'Uranium',93:'Neptunium',94:'Plutonium',
+  95:'Americium',96:'Curium',97:'Berkelium',98:'Californium',99:'Einsteinium',
+  100:'Fermium',101:'Mendelevium',102:'Nobelium',103:'Lawrencium',104:'Rutherfordium',
+  105:'Dubnium',106:'Seaborgium',107:'Bohrium',108:'Hassium',109:'Meitnerium',
+  110:'Darmstadtium',111:'Roentgenium',112:'Copernicium',113:'Nihonium',114:'Flerovium',
+  115:'Moscovium',116:'Livermorium',117:'Tennessine',118:'Oganesson'
+};
+
+// ═══════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════
+const toast = document.getElementById('toast');
+let toastTimer = null;
+
+function showToast(num, note, freq) {
+  toast.textContent = `♪ ${NAMES[num] || ''}  (${note})  ·  ${Math.round(freq)} Hz`;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 1600);
+}
+
+// ═══════════════════════════════════════════════════
+//  RIPPLE
+// ═══════════════════════════════════════════════════
+function addRipple(el) {
+  const r = document.createElement('div');
+  r.className = 'ripple-ring';
+  el.appendChild(r);
+  setTimeout(() => r.remove(), 500);
+}
+
+// ═══════════════════════════════════════════════════
+//  TRIGGER (shared by mouse & touch)
+// ═══════════════════════════════════════════════════
+let lastPlayed = null;
+
+function triggerElement(el) {
+  if (!el || !el.classList.contains('element')) return;
+  if (el === lastPlayed) return;   // debounce same cell
+  lastPlayed = el;
+
+  const note = el.dataset.note;
+  const freq = NOTE_FREQ[note];
+  if (!freq) return;
+
+  playPianoNote(freq);
+  addRipple(el);
+  showToast(Number(el.dataset.num), note, freq);
+
+  el.classList.add('active');
+  setTimeout(() => el.classList.remove('active'), 300);
+}
+
+// ═══════════════════════════════════════════════════
+//  MOUSE EVENTS (desktop hover)
+// ═══════════════════════════════════════════════════
+document.querySelectorAll('.element').forEach(el => {
+  el.addEventListener('mouseenter', () => {
+    lastPlayed = null;   // reset so re-entering same cell plays again
+    triggerElement(el);
+  });
+});
+
+// ═══════════════════════════════════════════════════
+//  TOUCH EVENTS (mobile slide-to-play)
+//  We listen on the TABLE (not individual cells) so
+//  a single finger drag fires across every element
+//  it passes over without the page scrolling.
+// ═══════════════════════════════════════════════════
+const tableEl = document.getElementById('table');
+
+tableEl.addEventListener('touchstart', e => {
+  // unlock AudioContext on first touch (iOS requirement)
+  getCtx();
+  lastPlayed = null;
+  handleTouch(e);
+}, { passive: false });
+
+tableEl.addEventListener('touchmove', e => {
+  e.preventDefault();   // stop page scroll while playing
+  handleTouch(e);
+}, { passive: false });
+
+tableEl.addEventListener('touchend', () => {
+  lastPlayed = null;    // allow same element to re-trigger on next touch
+});
+
+function handleTouch(e) {
+  const touch = e.touches[0];
+  // find which element is under the finger
+  const el = document.elementFromPoint(touch.clientX, touch.clientY);
+  // walk up DOM in case finger is on a child span
+  const cell = el ? el.closest('.element') : null;
+  triggerElement(cell);
+}
+</script>
+</body>
+</html>

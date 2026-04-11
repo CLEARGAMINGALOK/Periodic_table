@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go to Periodic Table</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bg: #060b18;
+  --text: #e8f0ff;
+  --glow1: #54a0ff;
+  --glow2: #c56ef7;
+  --glow3: #55efc4;
+}
+
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: var(--bg);
+  font-family: 'Rajdhani', sans-serif;
+  overflow: hidden;
+}
+
+/* Background glow */
+body::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(84,160,255,0.1), transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(197,110,247,0.1), transparent 50%);
+  z-index: 0;
+}
+
+/* Button */
+.btn {
+  position: relative;
+  z-index: 1;
+  padding: 20px 50px;
+  font-size: 1.5rem;
+  font-family: 'Orbitron', monospace;
+  letter-spacing: 3px;
+  color: var(--text);
+  text-decoration: none;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: linear-gradient(var(--bg), var(--bg)) padding-box,
+              linear-gradient(135deg, var(--glow1), var(--glow2), var(--glow3)) border-box;
+  transition: 0.3s ease;
+  box-shadow: 0 0 20px rgba(84,160,255,0.2);
+}
+
+/* Hover effect */
+.btn:hover {
+  transform: scale(1.1);
+  box-shadow:
+    0 0 25px var(--glow1),
+    0 0 35px var(--glow2),
+    0 0 45px var(--glow3);
+}
+</style>
+</head>
+
+<body>
+
+<a href="periodic_table_enhanced.html" class="btn">
+  GO TO PERIODIC TABLE
+</a>
+
+</body>
+</html>
